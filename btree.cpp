@@ -6,13 +6,7 @@ static uint64_t nodeId;
 Node::Node(uint64_t maxCapacity) : maxCap(maxCapacity), id(nodeId++), ceilCap(CEIL_CAP(maxCapacity)) {}
 Node::~Node() {}
 
-InternalNode::InternalNode(uint64_t maxCapacity) : Node(maxCapacity) {
-    // TODO: impl
-}
-
-std::shared_ptr<Node> InternalNode::split() {
-    // Implementation
-}
+InternalNode::InternalNode(uint64_t maxCapacity = INTERNAL_NODE_CAP) : Node(maxCapacity) {}
 
 std::shared_ptr<Node> InternalNode::findChildPtr(const Record& record) {
     // Implementation
@@ -35,20 +29,35 @@ void InternalNode::insert(Record record) {
     // insert a record into a leaf node below
     std::shared_ptr<Node> child = findChildPtr(record); 
 
-
-    std::shared_ptr<LeafNode> leafNode;
-    while (!std::dynamic_pointer_cast<LeafNode>(child)) {
-
-        std::shared_ptr<InternalNode> internalNode = std::dynamic_pointer_cast<InternalNode>(child); 
+    while (!child->isLeaf()) {
+        std::shared_ptr<InternalNode> internalNode = std::dynamic_pointer_cast<InternalNode>(child);
+        if (!internalNode) {
+            std::cerr << "Error: Expected InternalNode" << std::endl;
+            return;
+        }
         child = internalNode->findChildPtr(record);
     }
 
-    if (leafNode->canInsert()) {
-        leafNode->insert(record);
-    } else {
-        // Copy up with possibility of causing a push up.
-    }
-    
+    if (child->isLeaf()) {
+        std::shared_ptr<LeafNode> leafNode = std::dynamic_pointer_cast<LeafNode>(child);
+        
+        if (leafNode->canInsert()) {
+            leafNode->insert(record);
+        } else {
+            auto internalParent = leafNode->parent;
+            if (internalParent->canInsert()) {
+                leafNode->insert(record);
+                std::shared_ptr<LeafNode> splitNode = leafNode->split();
+                internalParent->copyUp(splitNode);
+            } else {
+                auto pushedNode = internalParent->pushUp();
+                printf("pushed node: %d\n", pushedNode->id);
+                // internalParent->insert(record);
+                // insert(record);
+                // internalParent->parent->insert(record);
+            }     
+        }
+    }    
 }
 
 void InternalNode::remove(Record record) {
@@ -56,14 +65,11 @@ void InternalNode::remove(Record record) {
 }
 
 void InternalNode::print() {
-    // Implementation
-    std::cout << "[";
-    std::cout << ltChildPtr->id << "|"; 
-    for (auto child : children)
-    {
-        std::cout << child.record.key << "*|" << child.gtChildPtr->id; 
+    std::cout << "<" << id << ">" << "[" << ltChildPtr->id;
+    for (const auto& child : children) {
+        std::cout << " | " << child.record.key << "* | " << child.gtChildPtr->id;
     }
-    std::cout << "]";
+    std::cout << "]" << std::endl;
 }
 
 void InternalNode::copyUp(std::shared_ptr<LeafNode> leaf) {
@@ -83,8 +89,56 @@ void InternalNode::copyUp(std::shared_ptr<LeafNode> leaf) {
     curCap++;
 }
 
-void InternalNode::pushUp(std::shared_ptr<InternalNode> internal) {
-    // Implementation
+void InternalNode::addChild(InternalRecord child) {
+    auto it = std::lower_bound(children.begin(), children.end(), child,
+        [](const InternalRecord& lhs, const InternalRecord& rhs) {
+            return lhs.record.key < rhs.record.key;
+        });
+
+    children.insert(it, child);
+    curCap++;
+}
+
+void InternalNode::removeChild(const InternalRecord& targetChild) {
+    auto newEnd = std::remove_if(children.begin(), children.end(),
+        [&targetChild](const InternalRecord& child) {
+            return child.record.key == targetChild.record.key;
+        });
+
+    if (newEnd != children.end()) {
+        children.erase(newEnd, children.end());
+        curCap--;
+    }
+}
+
+std::shared_ptr<InternalNode> InternalNode::pushUp() {
+    // TODO: implement
+    // ACUTAL TODO: use the removeChild and addChild methods to 
+    // properly make the pushUp to manage the curCap of all nodes involved 
+    if (!parent) {
+        auto newParent = std::make_shared<InternalNode>();
+        auto splitNode = std::make_shared<InternalNode>();
+
+        auto it = children.begin() + (curCap / 2);
+        InternalRecord middleRecord = *it;
+
+        // newParent->ltChildPtr = shared_from_this();
+        // splitNode->ltChildPtr = middleRecord.gtChildPtr;
+        // middleRecord.gtChildPtr = splitNode;
+
+        // newParent->addChild(middleRecord);
+
+        // parent = newParent;
+        // splitNode->parent = newParent;
+
+        // // splitNode->children.insert(splitNode->children.begin(), it + 1, children.end());
+        // // children.erase(it, children.end()); 
+        // removeChild();
+        return newParent;
+    } else {
+        // TODO: handle level 4 .. k
+        return shared_from_this();
+    }
 }
 
 void InternalNode::merge() {
@@ -94,12 +148,9 @@ void InternalNode::merge() {
 LeafNode::LeafNode(uint64_t maxCapacity) : Node(maxCapacity) {}
 
 void LeafNode::insert(Record record) {
-    printf("leaf insert: %lu\n", record.key);
-    if (curCap < ceilCap) {
-        auto it = std::lower_bound(elements.begin(), elements.end(), record);
-        elements.insert(it, record);
-        curCap++;
-    }
+    auto it = std::lower_bound(elements.begin(), elements.end(), record);
+    elements.insert(it, record);
+    curCap++;
 }
 
 void LeafNode::remove(Record record) {
@@ -112,17 +163,14 @@ void LeafNode::remove(Record record) {
 }
 
 void LeafNode::print() {
-    std::cout << "[";
-    for (auto el : elements)
-    {
-        std::cout << el.key << "*";
-    }
-    std::cout << "]";
+    std::cout << "<" << id << ">" << "[";
+    for (auto el : elements) { std::cout << el.key << "*"; }
+    std::cout << "] ";
 }
 
 std::shared_ptr<LeafNode> LeafNode::split() {
-    std::shared_ptr<LeafNode> splitNode = std::make_shared<LeafNode>(LEAF_NODE_CAP);
-    
+    // 
+    std::shared_ptr<LeafNode> splitNode = std::make_shared<LeafNode>(LEAF_NODE_CAP); 
     int i = 0;
     for (auto el: elements) {
         if (i >= (curCap / 2)) {
@@ -131,6 +179,7 @@ std::shared_ptr<LeafNode> LeafNode::split() {
         }
         i++;
     }
+    splitNode->parent = this->parent;
     return splitNode;
 }
 
@@ -143,7 +192,7 @@ void BTree::insert(Record record) {
         std::shared_ptr<LeafNode> leafRoot = std::dynamic_pointer_cast<LeafNode>(rootNode);
 
         if (leafRoot->canInsert()) {
-            // simple insert to start
+            // simple insert
             rootNode->insert(record);
         } else {
             std::shared_ptr<InternalNode> newInternalRoot = std::make_shared<InternalNode>(INTERNAL_NODE_CAP);
@@ -160,30 +209,44 @@ void BTree::insert(Record record) {
     } else {
         rootNode->insert(record);
     }
+
+    if (rootNode->parent != nullptr) {
+        rootNode = rootNode->parent;
+    }
 }
 
 void BTree::remove(Record record) {
     // Implementation
 }
 
-void printTree(const std::unique_ptr<BTree>& tree) {
-    // Implementation   
-    if (tree) {
-        std::cout << std::endl; 
-        std::shared_ptr<Node> root = tree->rootNode;
-        if (root->isLeaf()) {
-            printf("root is leaf\n");
-            std::shared_ptr<LeafNode> leafRoot = std::dynamic_pointer_cast<LeafNode>(root); 
-            leafRoot->print();
-        } else {
-            printf("root is internal\n");
-            std::shared_ptr<InternalNode> internalRoot = std::dynamic_pointer_cast<InternalNode>(root); 
-            internalRoot->print();
-            printf("\n");
-            internalRoot->ltChildPtr->print();
-            for (auto child: internalRoot->children)
-            {
-                child.gtChildPtr->print();
+void BTree::printTree(const std::unique_ptr<BTree>& tree) {
+    printf("\n================\n");
+    
+    if (!tree || !tree->rootNode) {
+        std::cout << "Tree is empty" << std::endl;
+        return;
+    }
+
+    std::queue<std::shared_ptr<Node>> nodesQueue;
+    nodesQueue.push(tree->rootNode);
+
+    while (!nodesQueue.empty()) {
+        std::shared_ptr<Node> currentNode = nodesQueue.front();
+        nodesQueue.pop();
+
+        currentNode->print();
+
+        if (!currentNode->isLeaf()) {
+            std::shared_ptr<InternalNode> internalNode = std::dynamic_pointer_cast<InternalNode>(currentNode);
+
+            if (internalNode->ltChildPtr) {
+                nodesQueue.push(internalNode->ltChildPtr);
+            }
+
+            for (const auto& child : internalNode->children) {
+                if (child.gtChildPtr) {
+                    nodesQueue.push(child.gtChildPtr);
+                }
             }
         }
     }
@@ -196,8 +259,15 @@ int main() {
     tree->insert(Record {21});
     tree->insert(Record {9});
     tree->insert(Record {28});
+    tree->insert(Record {14});
+    tree->insert(Record {49});
+    tree->insert(Record {22});
+    tree->insert(Record {89});
+    // tree->printTree(tree);
+    tree->insert(Record {29});
+    tree->insert(Record {18});
     
-    printTree(tree);
+    tree->printTree(tree);
 
     return 0;
 }

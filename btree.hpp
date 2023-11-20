@@ -1,6 +1,7 @@
 #include <iostream>
 #include <memory>
 #include <cstdint>
+#include <queue>
 #include <vector>
 #include <algorithm>
 #include <assert.h>
@@ -48,7 +49,10 @@ public:
     virtual bool isLeaf() = 0;
 };
 
-class InternalNode : public Node {
+class InternalNode : 
+    public Node,
+    public std::enable_shared_from_this<InternalNode> // necessary for self mutating pushUp()
+{
 public:
     InternalNode(uint64_t maxCapacity);
 
@@ -60,12 +64,17 @@ public:
     bool isLeaf() override { return false; };
     
     void copyUp(std::shared_ptr<LeafNode> leaf);
-    void pushUp(std::shared_ptr<InternalNode> internal);
+    // void pushUp();
+    std::shared_ptr<InternalNode> pushUp();
     void merge();
+    inline bool canInsert() { return (curCap < maxCap ? true : false); } 
+    inline bool canRemove() { return (curCap > 1); }
+    
+    void addChild(InternalRecord child); //helper
+    void removeChild(const InternalRecord& child); //helper
     std::shared_ptr<Node> findChildPtr(const Record& record); // helper
  
     std::vector<InternalRecord> children;
-    std::shared_ptr<InternalRecord> parent;
     std::shared_ptr<Node> ltChildPtr; // asymmetric less than child
 };
 
@@ -89,9 +98,8 @@ public:
     BTree();
     ~BTree();
     std::shared_ptr<Node> rootNode;
-
+    
+    void printTree(const std::unique_ptr<BTree>& tree);
     void insert(Record record);
     void remove(Record record);
 };
-
-void printTree(const std::unique_ptr<BTree>& tree);
