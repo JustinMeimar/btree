@@ -1,3 +1,7 @@
-#include <nlohmann/json.hpp>
+#include "serializer.hpp"
 
-using json = nlohmann::json;
+std::string treeToJson(const std::unique_ptr<BTree>& tree)
+{
+    std::string jsonString = "twee";
+    return jsonString;
+}

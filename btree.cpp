@@ -2,6 +2,21 @@
 
 static uint64_t nodeId;
 
+std::string InternalRecord::dumpJSON() {
+    json recordJSON;
+    recordJSON["key"] = record.key;
+    recordJSON["gt_child"] = gtChildPtr->id;
+
+    return recordJSON.dump();
+}
+
+std::string Record::dumpJSON() {
+    json recordJSON;
+    recordJSON["key"] = key;
+
+    return recordJSON.dump();
+}
+
 // Constructor and Desctructor
 Node::Node(uint64_t maxCapacity) : maxCap(maxCapacity), id(nodeId++), ceilCap(CEIL_CAP(maxCapacity)) {}
 Node::~Node() {}
@@ -68,15 +83,51 @@ void InternalNode::print() {
     std::cout << "]" << std::endl;
 }
 
+std::string InternalNode::dumpJSON() {
+
+    json nodeJSON;
+
+    nodeJSON["id"] = id;
+    nodeJSON["parent"] = parent->id;
+    nodeJSON["cur_cap"] = curCap;
+
+    json childArray = json::array(); 
+
+    for (InternalRecord child: children) {    
+        childArray.push_back(child.dumpJSON());
+    }
+
+    nodeJSON["children"] = childArray;
+
+    return nodeJSON.dump();
+}
+
+std::string LeafNode::dumpJSON() {
+    json leafJSON;
+    leafJSON["id"] = id;
+    leafJSON["parent"] = parent->id;
+    leafJSON["cur_cap"] = parent->id;
+
+    json recordArray = json::array(); 
+
+    for (Record leafRecord: elements) {    
+        recordArray.push_back(leafRecord.dumpJSON());
+    }
+
+    leafJSON["records"] = recordArray;
+
+    return leafJSON.dump();
+}
+
 void InternalNode::copyUp(std::shared_ptr<LeafNode> leaf) {
-    printf("--- COPY UP ---\n");
+    // printf("--- COPY UP ---\n");
     // Implementation
     Record firstRecord = leaf->elements.at(0);
     InternalRecord intRecord = {
         firstRecord,
         leaf
     }; 
-    printf("Copy %d into %d\n", firstRecord, id);
+    // printf("Copy %d into %d\n", firstRecord, id);
     addChild(intRecord); 
 }
 
@@ -104,14 +155,14 @@ void InternalNode::removeChild(const InternalRecord& targetChild) {
 
 std::shared_ptr<InternalNode> InternalNode::pushUp() {
     // TODO: REFACTOR
-    printf("--- PUSH UP ---\n"); 
+    // printf("--- PUSH UP ---\n"); 
     if (!parent) {
         auto newParent = std::make_shared<InternalNode>();
         newParent->ltChildPtr = shared_from_this();
         parent = newParent;       
     }
     if (!parent->canInsert()) {
-        printf("HANDLE A FULL GRAND PARENT\n");
+        // printf("HANDLE A FULL GRAND PARENT\n");
         return nullptr;
     }
     auto splitNode = std::make_shared<InternalNode>();
@@ -248,6 +299,17 @@ void BTree::printTree(const std::unique_ptr<BTree>& tree) {
     }
 }
 
+std::string BTree::serializeToJSON()
+{
+    json btree;
+    btree["nodes"] = {1, 5, 6, 8};
+
+    // TODO: handle serializeing the entire tree.
+    
+    std::string jsonString = btree.dump();
+    return jsonString;
+}
+
 int main() {
     
     std::unique_ptr<BTree> tree = std::make_unique<BTree>(); 
@@ -260,47 +322,14 @@ int main() {
     tree->insert(Record {22});
     tree->insert(Record {89});
     tree->insert(Record {97});
-    tree->insert(Record {99});
-    
+    tree->insert(Record {99});    
     tree->insert(Record {54});
     tree->insert(Record {57});
     tree->insert(Record {50});
     tree->insert(Record {51});
 
-    tree->printTree(tree);
-    // tree->insert(Record {29});
-    // tree->insert(Record {18});
-    
-    // tree->printTree(tree);
+    std::string jsonRepr = tree->serializeToJSON();
+    std::cout << jsonRepr << std::endl;
 
     return 0;
 }
-
-/** 
-    // std::shared_ptr<LeafNode> leafs[4];
-    // leafs[0] = std::make_shared<LeafNode>();
-    // leafs[1] = std::make_shared<LeafNode>();
-    // leafs[2] = std::make_shared<LeafNode>();
-    // leafs[3] = std::make_shared<LeafNode>();
-
-    // for (int i = 0 ; i < 4; i++) { leafs[i]->print(); }
-    
-    // auto internalNode = std::make_shared<InternalNode>();
-
-    // printf("\n==============\n");
-
-    // internalNode->ltChildPtr = leafs[0];
-    // internalNode->print();
-    // internalNode->addChild(InternalRecord {Record{25}, leafs[1]});
-    // internalNode->print();
-    // internalNode->addChild(InternalRecord {Record{15}, leafs[2]});
-    // internalNode->print();
-    // internalNode->addChild(InternalRecord {Record{90}, leafs[3]});
-    // internalNode->print();
-    // internalNode->removeChild(InternalRecord {Record{15}, leafs[2]});
-    // internalNode->print();
-    // internalNode->removeChild(InternalRecord {Record{90}, leafs[3]});
-    // internalNode->print();
-    // internalNode->removeChild(InternalRecord {Record{25}, leafs[1]});
-    // internalNode->print();
-*/

@@ -1,3 +1,4 @@
+#ifndef BTREE_H
 #include <iostream>
 #include <memory>
 #include <cstdint>
@@ -5,6 +6,9 @@
 #include <vector>
 #include <algorithm>
 #include <assert.h>
+#include <nlohmann/json.hpp>
+
+using json = nlohmann::json;
 
 #define LEAF_NODE_CAP 3
 #define INTERNAL_NODE_CAP 3
@@ -25,11 +29,15 @@ struct Record {
     bool operator==(const Record& other) const {
         return key == other.key;
     }
+
+    std::string dumpJSON();
 };
 
 struct InternalRecord {
     Record record;
     std::shared_ptr<Node> gtChildPtr;
+
+    std::string dumpJSON();
 };
 
 
@@ -47,6 +55,7 @@ public:
     virtual void remove(Record record) = 0;
     virtual void print() = 0;
     virtual bool isLeaf() = 0;
+    virtual std::string dumpJSON() = 0;
 };
 
 class InternalNode : 
@@ -62,6 +71,7 @@ public:
     void remove(Record record) override;
     void print() override;
     bool isLeaf() override { return false; };
+    std::string dumpJSON() override;
     
     void copyUp(std::shared_ptr<LeafNode> leaf);
     // void pushUp();
@@ -86,6 +96,7 @@ public:
     void remove(Record record) override;
     void print() override;
     bool isLeaf() override { return true; };
+    std::string dumpJSON() override;
 
     inline bool canInsert() { return (curCap < ceilCap ? true : false); } 
     inline bool canRemove() { return (curCap > 1); }
@@ -98,8 +109,11 @@ public:
     BTree();
     ~BTree();
     std::shared_ptr<Node> rootNode;
-    
+
+    std::string serializeToJSON(); 
     void printTree(const std::unique_ptr<BTree>& tree);
     void insert(Record record);
     void remove(Record record);
 };
+
+#endif
