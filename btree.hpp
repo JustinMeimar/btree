@@ -1,5 +1,8 @@
 #ifndef BTREE_H
+#include <fstream>
+#include <sstream>
 #include <iostream>
+#include <string>
 #include <memory>
 #include <cstdint>
 #include <queue>
@@ -108,10 +111,11 @@ class BTree {
 public:
     BTree();
     ~BTree();
+    uint64_t capacity; 
     std::shared_ptr<Node> rootNode;
 
     std::string serializeToJSON(); 
-    void printTree(const std::unique_ptr<BTree>& tree);
+    void print();
     void insert(Record record);
     void remove(Record record);
 };

@@ -18,7 +18,7 @@ std::string Record::dumpJSON() {
 }
 
 // Constructor and Desctructor
-Node::Node(uint64_t maxCapacity) : maxCap(maxCapacity), id(nodeId++), ceilCap(CEIL_CAP(maxCapacity)) {}
+Node::Node(uint64_t maxCapacity) : maxCap(maxCapacity), id(nodeId++), ceilCap(CEIL_CAP(maxCapacity)), curCap(0) {}
 Node::~Node() {}
 
 InternalNode::InternalNode(uint64_t maxCapacity = INTERNAL_NODE_CAP) : Node(maxCapacity) {}
@@ -54,20 +54,25 @@ void InternalNode::insert(Record record) {
     }
 
     std::shared_ptr<LeafNode> leafNode = std::dynamic_pointer_cast<LeafNode>(child);
-    
-    if (leafNode->canInsert()) {
-        leafNode->insert(record);
-    } else {
-        auto internalParent = leafNode->parent;
-        if (internalParent->canInsert()) {
+    if (leafNode) {
+        if (leafNode->canInsert()) {
             leafNode->insert(record);
-            std::shared_ptr<LeafNode> splitNode = leafNode->split();
-            internalParent->copyUp(splitNode);
         } else {
-            auto pushedNode = internalParent->pushUp();
-            pushedNode->insert(record);
-        }     
-    }
+            auto internalParent = leafNode->parent;
+            if (internalParent->canInsert()) {
+                std::cout << "parent can insert with capacity: " << internalParent->curCap << std::endl;
+                leafNode->insert(record);
+                std::shared_ptr<LeafNode> splitNode = leafNode->split();
+                internalParent->copyUp(splitNode);
+            } else {
+                std::cout << "parent can NOT insert with capacity: " << internalParent->curCap << std::endl;
+                auto pushedNode = internalParent->pushUp();
+                std::cout << "pushed node: " << pushedNode << std::endl;  
+                pushedNode->insert(record);
+            }     
+        }
+    }  
+    
     return;
 }
 
@@ -76,7 +81,11 @@ void InternalNode::remove(Record record) {
 }
 
 void InternalNode::print() {
-    std::cout << "<" << id << "," << curCap << ">" << "[" << ltChildPtr->id;
+    std::string parentId = "null";
+    if (parent) {
+        parentId = std::to_string(parent->id);
+    }
+    std::cout << "<" << id << "," << curCap << "," << parent << ">" << "[" << ltChildPtr->id;
     for (const auto& child : children) {
         std::cout << " | " << child.record.key << "* | " << child.gtChildPtr->id;
     }
@@ -153,17 +162,27 @@ void InternalNode::removeChild(const InternalRecord& targetChild) {
     }
 }
 
+/**
+ * pushUp: split the internal node in two. The middle element is pushed into the parent node.
+ * The leftChildPtr of the middle node now must pont to the lhs Split Node, and the gtChildPtr
+ * must point to the RHS split node.
+ * 
+ * @returns a pointer to the node that the split node is pushed into 
+*/
 std::shared_ptr<InternalNode> InternalNode::pushUp() {
-    // TODO: REFACTOR
-    // printf("--- PUSH UP ---\n"); 
+
     if (!parent) {
         auto newParent = std::make_shared<InternalNode>();
         newParent->ltChildPtr = shared_from_this();
         parent = newParent;       
     }
     if (!parent->canInsert()) {
-        // printf("HANDLE A FULL GRAND PARENT\n");
-        return nullptr;
+        parent->pushUp();
+        std::shared_ptr<InternalNode> tempParent = parent;
+        while (tempParent->parent) {
+            tempParent = tempParent->parent;
+        }
+        return tempParent;
     }
     auto splitNode = std::make_shared<InternalNode>();
     auto it = children.begin() + (curCap / 2);
@@ -189,48 +208,57 @@ std::shared_ptr<InternalNode> InternalNode::pushUp() {
 }
 
 void InternalNode::merge() {
-    // Implementation
+    // TODO: Implementation
 }
 
 LeafNode::LeafNode(uint64_t maxCapacity = LEAF_NODE_CAP) : Node(maxCapacity) {}
 
 void LeafNode::insert(Record record) {
+    std::cout << "[leaf" << id <<  "] capacity before:" << curCap << std::endl; 
     auto it = std::lower_bound(elements.begin(), elements.end(), record);
     elements.insert(it, record);
     curCap++;
 }
 
 void LeafNode::remove(Record record) {
-    // remove node impl...
     auto it = std::find(elements.begin(), elements.end(), record);
     if (it != elements.end()) {
         elements.erase(it);
-        curCap--;
     }
-}
-
-void LeafNode::print() {
-    std::cout << "<" << id << "," << curCap <<  "," << parent->id << ">" << "[";
-    for (auto el : elements) { std::cout << el.key << "*"; }
-    std::cout << "] ";
+    curCap = elements.size();
 }
 
 std::shared_ptr<LeafNode> LeafNode::split() {
-    // 
     std::shared_ptr<LeafNode> splitNode = std::make_shared<LeafNode>(LEAF_NODE_CAP); 
-    int i = 0;
-    for (auto el: elements) {
-        if (i >= (curCap / 2)) {
-            remove(el);
-            splitNode->insert(el);
-        }
-        i++;
+
+    size_t splitIndex = elements.size() / 2;
+
+    std::vector<Record> elementsToMove(elements.begin() + splitIndex, elements.end());
+    elements.erase(elements.begin() + splitIndex, elements.end());
+    for (const auto& el : elementsToMove) {
+        splitNode->insert(el);
     }
+
     splitNode->parent = this->parent;
+    curCap = elements.size();
+    std::cout << "ELEMENTS::SIZE() PREV" << curCap << "ELEMENTS::SIZE SPLIT" << splitNode->curCap << std::endl; 
     return splitNode;
 }
 
-BTree::BTree() : rootNode(std::make_shared<LeafNode>(LEAF_NODE_CAP)) {}
+void LeafNode::print() {
+    
+    std::string parentId = "null";
+    if (parent) { 
+        parentId = std::to_string(parent->id);
+    }
+
+    std::cout << "<" << id << "," << curCap <<  "," << parentId << ">" << "[";
+    for (auto el : elements) { std::cout << el.key << "*"; }
+    std::cout << "] ";
+    
+}
+
+BTree::BTree() : capacity(0), rootNode(std::make_shared<LeafNode>(LEAF_NODE_CAP)) {}
 BTree::~BTree() {}
 
 void BTree::insert(Record record) {
@@ -260,36 +288,32 @@ void BTree::insert(Record record) {
     if (rootNode->parent != nullptr) {
         rootNode = rootNode->parent;
     }
+    capacity++;
 }
 
 void BTree::remove(Record record) {
-    // Implementation
+    // TODO: Implementation
 }
 
-void BTree::printTree(const std::unique_ptr<BTree>& tree) {
-    printf("\n================\n");
-    
-    if (!tree || !tree->rootNode) {
+void BTree::print() {
+    if (capacity == 0) {
         std::cout << "Tree is empty" << std::endl;
         return;
     }
 
     std::queue<std::shared_ptr<Node>> nodesQueue;
-    nodesQueue.push(tree->rootNode);
+    nodesQueue.push(rootNode);
 
     while (!nodesQueue.empty()) {
         std::shared_ptr<Node> currentNode = nodesQueue.front();
         nodesQueue.pop();
-
         currentNode->print();
 
         if (!currentNode->isLeaf()) {
             std::shared_ptr<InternalNode> internalNode = std::dynamic_pointer_cast<InternalNode>(currentNode);
-
             if (internalNode->ltChildPtr) {
                 nodesQueue.push(internalNode->ltChildPtr);
             }
-
             for (const auto& child : internalNode->children) {
                 if (child.gtChildPtr) {
                     nodesQueue.push(child.gtChildPtr);
@@ -303,33 +327,31 @@ std::string BTree::serializeToJSON()
 {
     json btree;
     btree["nodes"] = {1, 5, 6, 8};
-
-    // TODO: handle serializeing the entire tree.
-    
     std::string jsonString = btree.dump();
     return jsonString;
 }
 
-int main() {
+int main(int argc, char **argv) {
     
     std::unique_ptr<BTree> tree = std::make_unique<BTree>(); 
 
-    tree->insert(Record {21});
-    tree->insert(Record {9});
-    tree->insert(Record {28});
-    tree->insert(Record {14});
-    tree->insert(Record {49});
-    tree->insert(Record {22});
-    tree->insert(Record {89});
-    tree->insert(Record {97});
-    tree->insert(Record {99});    
-    tree->insert(Record {54});
-    tree->insert(Record {57});
-    tree->insert(Record {50});
-    tree->insert(Record {51});
+    std::string filename = "in.txt"; // default 
+    if (argc > 1) {
+        filename = argv[1];
+    }
+    std::ifstream file(filename);
+    std::string line;
 
-    std::string jsonRepr = tree->serializeToJSON();
-    std::cout << jsonRepr << std::endl;
-
+    if (file.is_open()) {
+        while (getline(file, line)) {
+            uint64_t number = static_cast<uint64_t>(std::stoul(line));
+            if (number) {
+                // printf("\n===============\n"); 
+                // std::cout << std::endl << "insert: " << number << std::endl;
+                tree->insert( Record {number});
+                tree->print();
+            }
+        }
+    }   
     return 0;
 }
