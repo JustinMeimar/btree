@@ -23,15 +23,16 @@ Node::~Node() {}
 
 InternalNode::InternalNode(uint64_t maxCapacity = INTERNAL_NODE_CAP) : Node(maxCapacity) {}
 
-std::shared_ptr<Node> InternalNode::findChildPtr(const Record& record) {
+
+std::shared_ptr<Node> InternalNode::findChildPtr(uint64_t key) {
     // Implementation
-    if (children.empty() || record.key < children.front().record.key) {
+    if (children.empty() || key < children.front().record.key) {
         return ltChildPtr;
     }
     
-    auto it = std::lower_bound(children.begin(), children.end(), record, 
-        [](const InternalRecord& lhs, const Record& rhs) {
-            return lhs.record.key < rhs.key;
+    auto it = std::lower_bound(children.begin(), children.end(), key, 
+        [](const InternalRecord& lhs, uint64_t rhsKey) {
+            return lhs.record.key < rhsKey;
         });
 
     if (it != children.begin())
@@ -40,9 +41,10 @@ std::shared_ptr<Node> InternalNode::findChildPtr(const Record& record) {
     return it->gtChildPtr;
 }
 
+
 void InternalNode::insert(Record record) {
     // insert a record into a leaf node below
-    std::shared_ptr<Node> child = findChildPtr(record); 
+    std::shared_ptr<Node> child = findChildPtr(record.key); 
 
     while (!child->isLeaf()) {
         std::shared_ptr<InternalNode> internalNode = std::dynamic_pointer_cast<InternalNode>(child);
@@ -50,7 +52,7 @@ void InternalNode::insert(Record record) {
             std::cerr << "Error: Expected InternalNode" << std::endl;
             return;
         }
-        child = internalNode->findChildPtr(record);
+        child = internalNode->findChildPtr(record.key);
     }
 
     std::shared_ptr<LeafNode> leafNode = std::dynamic_pointer_cast<LeafNode>(child);
@@ -60,14 +62,14 @@ void InternalNode::insert(Record record) {
         } else {
             auto internalParent = leafNode->parent;
             if (internalParent->canInsert()) {
-                std::cout << "parent can insert with capacity: " << internalParent->curCap << std::endl;
+                // std::cout << "parent can insert with capacity: " << internalParent->curCap << std::endl;
                 leafNode->insert(record);
                 std::shared_ptr<LeafNode> splitNode = leafNode->split();
                 internalParent->copyUp(splitNode);
             } else {
-                std::cout << "parent can NOT insert with capacity: " << internalParent->curCap << std::endl;
+                // std::cout << "parent can NOT insert with capacity: " << internalParent->curCap << std::endl;
                 auto pushedNode = internalParent->pushUp();
-                std::cout << "pushed node: " << pushedNode << std::endl;  
+                // std::cout << "pushed node: " << pushedNode << std::endl;  
                 pushedNode->insert(record);
             }     
         }
@@ -129,14 +131,11 @@ std::string LeafNode::dumpJSON() {
 }
 
 void InternalNode::copyUp(std::shared_ptr<LeafNode> leaf) {
-    // printf("--- COPY UP ---\n");
-    // Implementation
     Record firstRecord = leaf->elements.at(0);
     InternalRecord intRecord = {
         firstRecord,
         leaf
     }; 
-    // printf("Copy %d into %d\n", firstRecord, id);
     addChild(intRecord); 
 }
 
@@ -214,7 +213,7 @@ void InternalNode::merge() {
 LeafNode::LeafNode(uint64_t maxCapacity = LEAF_NODE_CAP) : Node(maxCapacity) {}
 
 void LeafNode::insert(Record record) {
-    std::cout << "[leaf" << id <<  "] capacity before:" << curCap << std::endl; 
+    // std::cout << "[leaf" << id <<  "] capacity before:" << curCap << std::endl; 
     auto it = std::lower_bound(elements.begin(), elements.end(), record);
     elements.insert(it, record);
     curCap++;
@@ -241,7 +240,7 @@ std::shared_ptr<LeafNode> LeafNode::split() {
 
     splitNode->parent = this->parent;
     curCap = elements.size();
-    std::cout << "ELEMENTS::SIZE() PREV" << curCap << "ELEMENTS::SIZE SPLIT" << splitNode->curCap << std::endl; 
+    // std::cout << "ELEMENTS::SIZE() PREV" << curCap << "ELEMENTS::SIZE SPLIT" << splitNode->curCap << std::endl; 
     return splitNode;
 }
 
@@ -331,6 +330,34 @@ std::string BTree::serializeToJSON()
     return jsonString;
 }
 
+/**
+ * Look up the index of a record based on the key 
+*/
+Record BTree::lookUp(uint64_t key) {
+
+    std::shared_ptr<Node> curNode = rootNode;
+
+    while (curNode) {
+        auto internalNode = std::dynamic_pointer_cast<InternalNode>(curNode);
+        if (internalNode) {
+            curNode = internalNode->findChildPtr(key);
+        } else {
+            auto leafNode = std::dynamic_pointer_cast<LeafNode>(curNode);
+            if (leafNode) {
+                auto it = std::find_if(leafNode->elements.begin(), leafNode->elements.end(),
+                    [key](const Record& record) { return record.key == key; });
+
+                if (it != leafNode->elements.end()) {
+                    return *it;
+                } else {
+                    return Record { UINT64_MAX };
+                }
+            }
+        }
+    }
+    return Record {}; 
+}
+
 int main(int argc, char **argv) {
     
     std::unique_ptr<BTree> tree = std::make_unique<BTree>(); 
@@ -346,12 +373,15 @@ int main(int argc, char **argv) {
         while (getline(file, line)) {
             uint64_t number = static_cast<uint64_t>(std::stoul(line));
             if (number) {
-                // printf("\n===============\n"); 
-                // std::cout << std::endl << "insert: " << number << std::endl;
                 tree->insert( Record {number});
-                tree->print();
             }
         }
-    }   
+        tree->print();
+    }  
+
+    for (int i = 1; i< 100; i++) {
+        std::cout << tree->lookUp(i).key << std::endl; 
+    }
+    
     return 0;
 }

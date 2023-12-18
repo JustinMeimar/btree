@@ -85,7 +85,8 @@ public:
     
     void addChild(InternalRecord child); //helper
     void removeChild(const InternalRecord& child); //helper
-    std::shared_ptr<Node> findChildPtr(const Record& record); // helper
+    // std::shared_ptr<Node> findChildPtr(const Record& record); // helper
+    std::shared_ptr<Node> findChildPtr(uint64_t key); // helper
  
     std::vector<InternalRecord> children;
     std::shared_ptr<Node> ltChildPtr; // asymmetric less than child
@@ -115,6 +116,7 @@ public:
     std::shared_ptr<Node> rootNode;
 
     std::string serializeToJSON(); 
+    Record lookUp(uint64_t key);
     void print();
     void insert(Record record);
     void remove(Record record);
