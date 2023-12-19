@@ -9,6 +9,7 @@
 #include <vector>
 #include <algorithm>
 #include <assert.h>
+#include <optional>
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
@@ -24,7 +25,10 @@ class LeafNode;
 
 struct Record {
     uint64_t key;
-
+    bool valid;
+    
+    Record(uint64_t k, bool v=true) : key(k), valid(v){}
+    
     bool operator<(const Record& other) const {
         return key < other.key;
     }
@@ -39,7 +43,6 @@ struct Record {
 struct InternalRecord {
     Record record;
     std::shared_ptr<Node> gtChildPtr;
-
     std::string dumpJSON();
 };
 

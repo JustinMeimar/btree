@@ -350,18 +350,18 @@ Record BTree::lookUp(uint64_t key) {
         } else {
             auto leafNode = std::dynamic_pointer_cast<LeafNode>(curNode);
             if (leafNode) {
-                // std::cout << "found " << key << " in leaf #" << leafNode->id << "\t"; 
                 auto it = std::find_if(leafNode->elements.begin(), leafNode->elements.end(),
                     [key](const Record& record) { return record.key == key; });
 
                 if (it != leafNode->elements.end()) {
                     return *it;
                 } else {
-                    return Record { UINT64_MAX };
+                    break;
                 }
             }
         }
     }
+    return Record {0, false};
 }
 
 void traverseLeafChain(const std::unique_ptr<BTree> &tree) {
@@ -401,7 +401,9 @@ B+ Tree Program Usage:
        Usage: ./btree -t <file_name>
 )";
 
-// tests to be performed in order
+/**
+ * Fails when insertion can not complete. Correctness of insertion validated in later tests. 
+*/
 bool testInsert(const std::unique_ptr<BTree> &tree, int numIndicies, std::ifstream &file) {
 
     try {
@@ -419,15 +421,23 @@ bool testInsert(const std::unique_ptr<BTree> &tree, int numIndicies, std::ifstre
     return true;     
 }
 
+/**
+ * Assert that each index we inserted into the tree can be found by searching from the
+ * root of the tree.
+*/
 bool testLookUp(const std::unique_ptr<BTree> &tree, int numIndicies, std::ifstream &file) {
     std::string line;
-    for (int i =0; i < numIndicies; i++) {
-        // if tree->lookUp(i);
+    for (int i =1; i < numIndicies; i++) {
+        if (!tree->lookUp(i).valid) {
+            return false;
+        }
     }
-    // while(getline(file, line)) {
+    if (tree->lookUp(numIndicies++).valid) {
+        std::cout << "found element that doesn't exist" << std::endl;
+        return false;
+    }
 
-    // }
-    return false;    
+    return true;    
 }
 
 /*
@@ -436,6 +446,11 @@ bool testLookUp(const std::unique_ptr<BTree> &tree, int numIndicies, std::ifstre
  * be monotonically increasing. This is what makes B+ Trees good for range queries.
 */
 bool testLeafChain(const std::unique_ptr<BTree> &tree) {
+    /**
+     * TODO: implement this test
+     *
+     * */ 
+    
     // for (int i = 0; i < length; i++) {
     //     std::cout << tree->lookUp(i).key << std::endl;
     // }
@@ -443,6 +458,9 @@ bool testLeafChain(const std::unique_ptr<BTree> &tree) {
     return false;    
 }
 
+/** 
+ * TODO: actually implement remove...
+*/
 bool testRemove(const std::unique_ptr<BTree> &tree) {
     return false;    
 }
@@ -458,12 +476,11 @@ void handleTests(const std::unique_ptr<BTree> &tree, std::ifstream &file) {
             std::streampos secondLinePos = file.tellg();
             std::cout << testInsert(tree, numIndicies, file) << std::endl;
             file.seekg(secondLinePos);  
-            testLookUp(tree, numIndicies, file);
+            std::cout << testLookUp(tree, numIndicies, file) << std::endl;
             file.seekg(secondLinePos);  
             testLeafChain(tree);
             testRemove(tree);  
         }
-
     }
 }
 

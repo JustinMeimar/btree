@@ -2,3 +2,5 @@
 btree
 obj/
 tests/*M.txt
+./obj/*
+./obj
