@@ -23,16 +23,14 @@ Node::~Node() {}
 
 InternalNode::InternalNode(uint64_t maxCapacity = INTERNAL_NODE_CAP) : Node(maxCapacity) {}
 
-
 std::shared_ptr<Node> InternalNode::findChildPtr(uint64_t key) {
-    // Implementation
     if (children.empty() || key < children.front().record.key) {
         return ltChildPtr;
     }
     
     auto it = std::lower_bound(children.begin(), children.end(), key, 
         [](const InternalRecord& lhs, uint64_t rhsKey) {
-            return lhs.record.key < rhsKey;
+            return lhs.record.key <= rhsKey;
         });
 
     if (it != children.begin())
@@ -41,11 +39,13 @@ std::shared_ptr<Node> InternalNode::findChildPtr(uint64_t key) {
     return it->gtChildPtr;
 }
 
-
 void InternalNode::insert(Record record) {
     // insert a record into a leaf node below
     std::shared_ptr<Node> child = findChildPtr(record.key); 
-
+    if (!child) {
+        print();
+        std::cout << "child is null "<< record.key << std::endl;
+    }
     while (!child->isLeaf()) {
         std::shared_ptr<InternalNode> internalNode = std::dynamic_pointer_cast<InternalNode>(child);
         if (!internalNode) {
@@ -62,14 +62,11 @@ void InternalNode::insert(Record record) {
         } else {
             auto internalParent = leafNode->parent;
             if (internalParent->canInsert()) {
-                // std::cout << "parent can insert with capacity: " << internalParent->curCap << std::endl;
                 leafNode->insert(record);
                 std::shared_ptr<LeafNode> splitNode = leafNode->split();
                 internalParent->copyUp(splitNode);
             } else {
-                // std::cout << "parent can NOT insert with capacity: " << internalParent->curCap << std::endl;
                 auto pushedNode = internalParent->pushUp();
-                // std::cout << "pushed node: " << pushedNode << std::endl;  
                 pushedNode->insert(record);
             }     
         }
@@ -186,6 +183,7 @@ std::shared_ptr<InternalNode> InternalNode::pushUp() {
     auto splitNode = std::make_shared<InternalNode>();
     auto it = children.begin() + (curCap / 2);
     InternalRecord middleRecord = *it;
+    middleRecord.gtChildPtr->parent = splitNode; // TODO: REASON
     it++;
 
     splitNode->ltChildPtr = middleRecord.gtChildPtr;
@@ -238,20 +236,27 @@ std::shared_ptr<LeafNode> LeafNode::split() {
         splitNode->insert(el);
     }
 
+    if (nextLeaf) {
+        splitNode->nextLeaf = nextLeaf;
+    }
+    nextLeaf = splitNode;
     splitNode->parent = this->parent;
     curCap = elements.size();
-    // std::cout << "ELEMENTS::SIZE() PREV" << curCap << "ELEMENTS::SIZE SPLIT" << splitNode->curCap << std::endl; 
+    
     return splitNode;
 }
 
 void LeafNode::print() {
     
     std::string parentId = "null";
+    std::string nextId = "null";
     if (parent) { 
         parentId = std::to_string(parent->id);
     }
-
-    std::cout << "<" << id << "," << curCap <<  "," << parentId << ">" << "[";
+    if (nextLeaf) {
+        nextId = std::to_string(nextLeaf->id);
+    }
+    std::cout << "<" << id << "," << curCap <<  "," << parentId << "," << nextId <<">" << "[";
     for (auto el : elements) { std::cout << el.key << "*"; }
     std::cout << "] ";
     
@@ -320,6 +325,7 @@ void BTree::print() {
             }
         }
     }
+    std::cout << std::endl;
 }
 
 std::string BTree::serializeToJSON()
@@ -344,6 +350,7 @@ Record BTree::lookUp(uint64_t key) {
         } else {
             auto leafNode = std::dynamic_pointer_cast<LeafNode>(curNode);
             if (leafNode) {
+                // std::cout << "found " << key << " in leaf #" << leafNode->id << "\t"; 
                 auto it = std::find_if(leafNode->elements.begin(), leafNode->elements.end(),
                     [key](const Record& record) { return record.key == key; });
 
@@ -355,32 +362,135 @@ Record BTree::lookUp(uint64_t key) {
             }
         }
     }
-    return Record {}; 
+}
+
+void traverseLeafChain(const std::unique_ptr<BTree> &tree) {
+
+    std::cout << tree->rootNode << std::endl;
+    
+    std::shared_ptr<LeafNode> curLeafNode; 
+    std::shared_ptr<Node> curNode = tree->rootNode;
+    while (curNode) { 
+        auto internalNode = std::dynamic_pointer_cast<InternalNode>(curNode);
+        if (internalNode) {
+            curNode = internalNode->ltChildPtr;
+        } else {
+            curLeafNode = std::dynamic_pointer_cast<LeafNode>(curNode);
+            break;
+        }
+    }
+
+    while (curLeafNode) {
+        curLeafNode->print();
+        curLeafNode = curLeafNode->nextLeaf;
+    }
+}
+
+const std::string helpMessage = R"(
+B+ Tree Program Usage:
+
+  Modes of Operation:
+    1. Regular Mode: Run in interactive mode 
+       Usage: ./btree
+
+    2. File Mode: Fill the tree with indexes from a file.
+       Usage: ./btree -f <file_name>
+       File Format: See tests
+
+    3. Test Mode:
+       Usage: ./btree -t <file_name>
+)";
+
+// tests to be performed in order
+bool testInsert(const std::unique_ptr<BTree> &tree, int numIndicies, std::ifstream &file) {
+
+    try {
+        std::string line; 
+        while (getline(file, line)) {
+            uint64_t index = static_cast<uint64_t>(std::stoul(line));
+            if (index) {
+                tree->insert( Record {index});
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Exception occurred: " << e.what() << std::endl;
+        return false;
+    }   
+    return true;     
+}
+
+bool testLookUp(const std::unique_ptr<BTree> &tree, int numIndicies, std::ifstream &file) {
+    std::string line;
+    for (int i =0; i < numIndicies; i++) {
+        // if tree->lookUp(i);
+    }
+    // while(getline(file, line)) {
+
+    // }
+    return false;    
+}
+
+/*
+ * Every index inserted into a B+ Tree is unique. Regardless of order,
+ * once N insertions are made the indicices in adjacent leaf nodes should
+ * be monotonically increasing. This is what makes B+ Trees good for range queries.
+*/
+bool testLeafChain(const std::unique_ptr<BTree> &tree) {
+    // for (int i = 0; i < length; i++) {
+    //     std::cout << tree->lookUp(i).key << std::endl;
+    // }
+    // traverseLeafChain(tree);
+    return false;    
+}
+
+bool testRemove(const std::unique_ptr<BTree> &tree) {
+    return false;    
+}
+
+void handleTests(const std::unique_ptr<BTree> &tree, std::ifstream &file) {
+    
+    std::string line;
+     
+    if (file.is_open()) {
+        if (getline(file, line)) {
+            int numIndicies = std::stoi(line);
+            
+            std::streampos secondLinePos = file.tellg();
+            std::cout << testInsert(tree, numIndicies, file) << std::endl;
+            file.seekg(secondLinePos);  
+            testLookUp(tree, numIndicies, file);
+            file.seekg(secondLinePos);  
+            testLeafChain(tree);
+            testRemove(tree);  
+        }
+
+    }
 }
 
 int main(int argc, char **argv) {
     
     std::unique_ptr<BTree> tree = std::make_unique<BTree>(); 
 
-    std::string filename = "in.txt"; // default 
-    if (argc > 1) {
-        filename = argv[1];
-    }
-    std::ifstream file(filename);
-    std::string line;
-
-    if (file.is_open()) {
-        while (getline(file, line)) {
-            uint64_t number = static_cast<uint64_t>(std::stoul(line));
-            if (number) {
-                tree->insert( Record {number});
-            }
+    if (argc == 1) {
+        while (1) {
+            uint64_t index;
+            scanf("%lu", &index);
+            tree->insert(Record{index});
+            tree->print();
         }
-        tree->print();
-    }  
+    }
+    else if (argc > 1) {
+        std::string flag = argv[1];
 
-    for (int i = 1; i< 100; i++) {
-        std::cout << tree->lookUp(i).key << std::endl; 
+        if (flag == "-t" && argc == 3) { 
+            std::string file_name = argv[2];
+            std::ifstream file(file_name);
+            handleTests(tree, file);
+        } else {
+            std::cerr << "Unknown flag: " << flag << std::endl;
+        }
+    } else {
+        std::cerr << "Invalid argument configuration.\n" << helpMessage;
     }
     
     return 0;

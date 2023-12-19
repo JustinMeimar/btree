@@ -95,6 +95,7 @@ public:
 class LeafNode : public Node {
 public:
     LeafNode(uint64_t maxCapacity);
+    std::shared_ptr<LeafNode> nextLeaf;
 
     void insert(Record record) override;
     void remove(Record record) override;
@@ -104,7 +105,7 @@ public:
 
     inline bool canInsert() { return (curCap < ceilCap ? true : false); } 
     inline bool canRemove() { return (curCap > 1); }
-   
+
     std::shared_ptr<LeafNode> split();
 };
 

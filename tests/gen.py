@@ -1,6 +1,9 @@
-import random 
+# Script to generate test cases
+# Usage: python3 gen.py <out_file> <n_records> (-s|-r) 
 
+import random 
 import sys
+
 if __name__ == "__main__":
     
     size = 10
@@ -12,7 +15,6 @@ if __name__ == "__main__":
         size = int(sys.argv[2])
         mode = sys.argv[3]
 
-     
     with open(file_name, "w") as file:
         if mode == "-r":
             numbers = random.sample(range(size), size) 
@@ -21,5 +23,3 @@ if __name__ == "__main__":
         elif mode == "-s":
             for i in range(size): 
                 file.write(str(i) + "\n")
-
-    # file.write("")
