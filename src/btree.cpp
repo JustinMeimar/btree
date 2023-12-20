@@ -1,23 +1,7 @@
-#include "btree.hpp" 
+#include "btree.h" 
 
 static uint64_t nodeId;
 
-std::string InternalRecord::dumpJSON() {
-    json recordJSON;
-    recordJSON["key"] = record.key;
-    recordJSON["gt_child"] = gtChildPtr->id;
-
-    return recordJSON.dump();
-}
-
-std::string Record::dumpJSON() {
-    json recordJSON;
-    recordJSON["key"] = key;
-
-    return recordJSON.dump();
-}
-
-// Constructor and Desctructor
 Node::Node(uint64_t maxCapacity) : maxCap(maxCapacity), id(nodeId++), ceilCap(CEIL_CAP(maxCapacity)), curCap(0) {}
 Node::~Node() {}
 
@@ -70,13 +54,12 @@ void InternalNode::insert(Record record) {
                 pushedNode->insert(record);
             }     
         }
-    }  
-    
+    }   
     return;
 }
 
-void InternalNode::remove(Record record) {
-    // Implementation
+void InternalNode::remove(uint64_t key) {
+    // TODO: Implementation
 }
 
 void InternalNode::print() {
@@ -91,41 +74,7 @@ void InternalNode::print() {
     std::cout << "]" << std::endl;
 }
 
-std::string InternalNode::dumpJSON() {
 
-    json nodeJSON;
-
-    nodeJSON["id"] = id;
-    nodeJSON["parent"] = parent->id;
-    nodeJSON["cur_cap"] = curCap;
-
-    json childArray = json::array(); 
-
-    for (InternalRecord child: children) {    
-        childArray.push_back(child.dumpJSON());
-    }
-
-    nodeJSON["children"] = childArray;
-
-    return nodeJSON.dump();
-}
-
-std::string LeafNode::dumpJSON() {
-    json leafJSON;
-    leafJSON["id"] = id;
-    leafJSON["parent"] = parent->id;
-    leafJSON["cur_cap"] = parent->id;
-
-    json recordArray = json::array(); 
-
-    for (Record leafRecord: elements) {    
-        recordArray.push_back(leafRecord.dumpJSON());
-    }
-
-    leafJSON["records"] = recordArray;
-
-    return leafJSON.dump();
-}
 
 void InternalNode::copyUp(std::shared_ptr<LeafNode> leaf) {
     Record firstRecord = leaf->elements.at(0);
@@ -188,7 +137,6 @@ std::shared_ptr<InternalNode> InternalNode::pushUp() {
 
     splitNode->ltChildPtr = middleRecord.gtChildPtr;
     middleRecord.gtChildPtr = splitNode;
-
     parent->addChild(middleRecord);
     splitNode->parent = parent;
 
@@ -217,8 +165,13 @@ void LeafNode::insert(Record record) {
     curCap++;
 }
 
-void LeafNode::remove(Record record) {
-    auto it = std::find(elements.begin(), elements.end(), record);
+/**
+ * Only called when we are sure we can remove without side-effects. 
+*/
+void LeafNode::remove(uint64_t key) {        
+    auto it = std::find_if(elements.begin(), elements.end(),
+        [key](const Record& record) { return record.key == key; });
+
     if (it != elements.end()) {
         elements.erase(it);
     }
@@ -226,10 +179,9 @@ void LeafNode::remove(Record record) {
 }
 
 std::shared_ptr<LeafNode> LeafNode::split() {
-    std::shared_ptr<LeafNode> splitNode = std::make_shared<LeafNode>(LEAF_NODE_CAP); 
-
+    
+    std::shared_ptr<LeafNode> splitNode = std::make_shared<LeafNode>(LEAF_NODE_CAP);
     size_t splitIndex = elements.size() / 2;
-
     std::vector<Record> elementsToMove(elements.begin() + splitIndex, elements.end());
     elements.erase(elements.begin() + splitIndex, elements.end());
     for (const auto& el : elementsToMove) {
@@ -238,9 +190,10 @@ std::shared_ptr<LeafNode> LeafNode::split() {
 
     if (nextLeaf) {
         splitNode->nextLeaf = nextLeaf;
-    }
+    } 
     nextLeaf = splitNode;
     splitNode->parent = this->parent;
+    splitNode->prevLeaf = shared_from_this();
     curCap = elements.size();
     
     return splitNode;
@@ -295,8 +248,16 @@ void BTree::insert(Record record) {
     capacity++;
 }
 
-void BTree::remove(Record record) {
-    // TODO: Implementation
+void BTree::remove(uint64_t key) {
+    
+    auto leafNode = findLeafNode(key);
+    if (leafNode) {
+        if (leafNode->canRemove()) {
+            leafNode->remove(key);
+        } else {
+            // TODO: Implement
+        }
+    }
 }
 
 void BTree::print() {
@@ -304,7 +265,6 @@ void BTree::print() {
         std::cout << "Tree is empty" << std::endl;
         return;
     }
-
     std::queue<std::shared_ptr<Node>> nodesQueue;
     nodesQueue.push(rootNode);
 
@@ -328,19 +288,10 @@ void BTree::print() {
     std::cout << std::endl;
 }
 
-std::string BTree::serializeToJSON()
-{
-    json btree;
-    btree["nodes"] = {1, 5, 6, 8};
-    std::string jsonString = btree.dump();
-    return jsonString;
-}
-
 /**
  * Look up the index of a record based on the key 
 */
-Record BTree::lookUp(uint64_t key) {
-
+std::shared_ptr<LeafNode> BTree::findLeafNode(uint64_t key) {
     std::shared_ptr<Node> curNode = rootNode;
 
     while (curNode) {
@@ -350,24 +301,33 @@ Record BTree::lookUp(uint64_t key) {
         } else {
             auto leafNode = std::dynamic_pointer_cast<LeafNode>(curNode);
             if (leafNode) {
-                auto it = std::find_if(leafNode->elements.begin(), leafNode->elements.end(),
-                    [key](const Record& record) { return record.key == key; });
-
-                if (it != leafNode->elements.end()) {
-                    return *it;
-                } else {
-                    break;
-                }
+                return leafNode;
+            } else {
+                break;
             }
         }
     }
+    return nullptr;
+}
+
+Record BTree::lookUp(uint64_t key) {
+
+    auto leafNode = findLeafNode(key);
+
+    if (leafNode) {
+        auto it = std::find_if(leafNode->elements.begin(), leafNode->elements.end(),
+            [key](const Record& record) { return record.key == key; });
+
+        if (it != leafNode->elements.end()) {
+            return *it;
+        } 
+    }
+
     return Record {0, false};
 }
 
 void traverseLeafChain(const std::unique_ptr<BTree> &tree) {
 
-    std::cout << tree->rootNode << std::endl;
-    
     std::shared_ptr<LeafNode> curLeafNode; 
     std::shared_ptr<Node> curNode = tree->rootNode;
     while (curNode) { 
@@ -379,136 +339,8 @@ void traverseLeafChain(const std::unique_ptr<BTree> &tree) {
             break;
         }
     }
-
     while (curLeafNode) {
         curLeafNode->print();
         curLeafNode = curLeafNode->nextLeaf;
     }
-}
-
-const std::string helpMessage = R"(
-B+ Tree Program Usage:
-
-  Modes of Operation:
-    1. Regular Mode: Run in interactive mode 
-       Usage: ./btree
-
-    2. File Mode: Fill the tree with indexes from a file.
-       Usage: ./btree -f <file_name>
-       File Format: See tests
-
-    3. Test Mode:
-       Usage: ./btree -t <file_name>
-)";
-
-/**
- * Fails when insertion can not complete. Correctness of insertion validated in later tests. 
-*/
-bool testInsert(const std::unique_ptr<BTree> &tree, int numIndicies, std::ifstream &file) {
-
-    try {
-        std::string line; 
-        while (getline(file, line)) {
-            uint64_t index = static_cast<uint64_t>(std::stoul(line));
-            if (index) {
-                tree->insert( Record {index});
-            }
-        }
-    } catch (const std::exception& e) {
-        std::cerr << "Exception occurred: " << e.what() << std::endl;
-        return false;
-    }   
-    return true;     
-}
-
-/**
- * Assert that each index we inserted into the tree can be found by searching from the
- * root of the tree.
-*/
-bool testLookUp(const std::unique_ptr<BTree> &tree, int numIndicies, std::ifstream &file) {
-    std::string line;
-    for (int i =1; i < numIndicies; i++) {
-        if (!tree->lookUp(i).valid) {
-            return false;
-        }
-    }
-    if (tree->lookUp(numIndicies++).valid) {
-        std::cout << "found element that doesn't exist" << std::endl;
-        return false;
-    }
-
-    return true;    
-}
-
-/*
- * Every index inserted into a B+ Tree is unique. Regardless of order,
- * once N insertions are made the indicices in adjacent leaf nodes should
- * be monotonically increasing. This is what makes B+ Trees good for range queries.
-*/
-bool testLeafChain(const std::unique_ptr<BTree> &tree) {
-    /**
-     * TODO: implement this test
-     *
-     * */ 
-    
-    // for (int i = 0; i < length; i++) {
-    //     std::cout << tree->lookUp(i).key << std::endl;
-    // }
-    // traverseLeafChain(tree);
-    return false;    
-}
-
-/** 
- * TODO: actually implement remove...
-*/
-bool testRemove(const std::unique_ptr<BTree> &tree) {
-    return false;    
-}
-
-void handleTests(const std::unique_ptr<BTree> &tree, std::ifstream &file) {
-    
-    std::string line;
-     
-    if (file.is_open()) {
-        if (getline(file, line)) {
-            int numIndicies = std::stoi(line);
-            
-            std::streampos secondLinePos = file.tellg();
-            std::cout << testInsert(tree, numIndicies, file) << std::endl;
-            file.seekg(secondLinePos);  
-            std::cout << testLookUp(tree, numIndicies, file) << std::endl;
-            file.seekg(secondLinePos);  
-            testLeafChain(tree);
-            testRemove(tree);  
-        }
-    }
-}
-
-int main(int argc, char **argv) {
-    
-    std::unique_ptr<BTree> tree = std::make_unique<BTree>(); 
-
-    if (argc == 1) {
-        while (1) {
-            uint64_t index;
-            scanf("%lu", &index);
-            tree->insert(Record{index});
-            tree->print();
-        }
-    }
-    else if (argc > 1) {
-        std::string flag = argv[1];
-
-        if (flag == "-t" && argc == 3) { 
-            std::string file_name = argv[2];
-            std::ifstream file(file_name);
-            handleTests(tree, file);
-        } else {
-            std::cerr << "Unknown flag: " << flag << std::endl;
-        }
-    } else {
-        std::cerr << "Invalid argument configuration.\n" << helpMessage;
-    }
-    
-    return 0;
 }

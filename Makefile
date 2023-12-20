@@ -1,16 +1,16 @@
-# Compiler
-CC=g++
-TARGET=btree
+CC := g++
+TARGET := btree
 OBJ_DIR := obj
-SRC_FILES = $(wildcard *.cpp)
-OBJ_FILES = $(SRC_FILES:%.cpp=$(OBJ_DIR)/%.o)
-CFLAGS=
+SRC_DIR := src
+SRC_FILES := $(wildcard $(SRC_DIR)/*.cpp)
+OBJ_FILES := $(SRC_FILES:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
+CFLAGS :=
 
 ifdef DEBUG
-	CFLAGS += -g
+    CFLAGS += -g
 endif
 
-$(OBJ_DIR)/%.o: %.cpp
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
 	@mkdir -p $(OBJ_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 

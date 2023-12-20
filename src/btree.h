@@ -1,4 +1,6 @@
 #ifndef BTREE_H
+#define BTREE_H
+
 #include <fstream>
 #include <sstream>
 #include <iostream>
@@ -9,14 +11,11 @@
 #include <vector>
 #include <algorithm>
 #include <assert.h>
-#include <optional>
-#include <nlohmann/json.hpp>
+// #include <nlohmann/json.hpp>
 
-using json = nlohmann::json;
-
-#define LEAF_NODE_CAP 3
+#define LEAF_NODE_CAP 5
 #define INTERNAL_NODE_CAP 3
-#define CEIL_CAP(maxCapacity) (((maxCapacity) + 1) / 2)
+#define CEIL_CAP(maxCap) (((maxCap) + 1) / 2)
 
 // Forward Declarations
 class Node;
@@ -32,20 +31,15 @@ struct Record {
     bool operator<(const Record& other) const {
         return key < other.key;
     }
-
     bool operator==(const Record& other) const {
         return key == other.key;
     }
-
-    std::string dumpJSON();
 };
 
 struct InternalRecord {
     Record record;
     std::shared_ptr<Node> gtChildPtr;
-    std::string dumpJSON();
 };
-
 
 class Node {
 public:
@@ -56,12 +50,10 @@ public:
     Node(uint64_t maxCapacity);
 
     virtual ~Node();
-
     virtual void insert(Record record) = 0;
-    virtual void remove(Record record) = 0;
+    virtual void remove(uint64_t key) = 0;
     virtual void print() = 0;
     virtual bool isLeaf() = 0;
-    virtual std::string dumpJSON() = 0;
 };
 
 class InternalNode : 
@@ -70,17 +62,16 @@ class InternalNode :
 {
 public:
     InternalNode(uint64_t maxCapacity);
-
-    std::shared_ptr<Node> split();
-
+    
+    std::vector<InternalRecord> children;
+    std::shared_ptr<Node> ltChildPtr; // asymmetric less than child
+    
     void insert(Record record) override;
-    void remove(Record record) override;
+    void remove(uint64_t key) override;
     void print() override;
     bool isLeaf() override { return false; };
-    std::string dumpJSON() override;
     
     void copyUp(std::shared_ptr<LeafNode> leaf);
-    // void pushUp();
     std::shared_ptr<InternalNode> pushUp();
     void merge();
     inline bool canInsert() { return (curCap < maxCap ? true : false); } 
@@ -88,27 +79,31 @@ public:
     
     void addChild(InternalRecord child); //helper
     void removeChild(const InternalRecord& child); //helper
-    // std::shared_ptr<Node> findChildPtr(const Record& record); // helper
     std::shared_ptr<Node> findChildPtr(uint64_t key); // helper
- 
-    std::vector<InternalRecord> children;
-    std::shared_ptr<Node> ltChildPtr; // asymmetric less than child
+    std::shared_ptr<Node> split();  
 };
 
-class LeafNode : public Node {
+class LeafNode : 
+    public Node,
+    public std::enable_shared_from_this<LeafNode> // necessary for assigning self to splitNode previous leaf
+{
 public:
     LeafNode(uint64_t maxCapacity);
+
     std::shared_ptr<LeafNode> nextLeaf;
+    std::shared_ptr<LeafNode> prevLeaf;
 
     void insert(Record record) override;
-    void remove(Record record) override;
+    void remove(uint64_t key) override;
+    void merge();
     void print() override;
     bool isLeaf() override { return true; };
-    std::string dumpJSON() override;
 
     inline bool canInsert() { return (curCap < ceilCap ? true : false); } 
-    inline bool canRemove() { return (curCap > 1); }
+    inline bool canRemove() { return (curCap >= ceilCap); }
 
+    std::shared_ptr<LeafNode> mergeWithLeftNeighbor();
+    std::shared_ptr<LeafNode> mergeWithRightNeighbor();
     std::shared_ptr<LeafNode> split();
 };
 
@@ -119,11 +114,11 @@ public:
     uint64_t capacity; 
     std::shared_ptr<Node> rootNode;
 
-    std::string serializeToJSON(); 
     Record lookUp(uint64_t key);
+    std::shared_ptr<LeafNode> findLeafNode(uint64_t key);
     void print();
     void insert(Record record);
-    void remove(Record record);
+    void remove(uint64_t key);
 };
 
 #endif

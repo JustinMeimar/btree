@@ -1,8 +1,22 @@
 # B+ Tree Implementation
 
-This project is an implementation of a B+ Tree data structure in C++. It offers functionalities like insertion, deletion, and lookup of keys. 
+Build: 
+```shell
+make
+```
 
-### Todo:
-- implement remove
-- benchmarks
-- clean up interfaces
+Run Tests:
+```shell
+python3 tests/run-tests.py
+```
+
+# Benchmarks
+
+| Data Size | Insert Time | Lookup Time |
+|-----------|-------------|-------------|
+| 100       |             |             |
+| 1K        |             |             |
+| 10K       |             |             |
+| 100K      |             |             |
+| 1M        |             |             |
+| 10M       |             |             |
