@@ -62,12 +62,12 @@ void runBenchmarks(const std::unique_ptr<BTree> &tree, std::ifstream &file) {
             file.seekg(secondLinePos);
 
             // Measure time for testLookUp
-            start = std::chrono::high_resolution_clock::now();
-            testLookUp(tree, numIndicies, file);
-            stop = std::chrono::high_resolution_clock::now();
-            std::chrono::duration<double, std::milli> lookup_duration = stop - start;
-            std::cout << "LookUp benchmark took " << lookup_duration.count() << " milliseconds.\n";
-            file.seekg(secondLinePos);
+            // start = std::chrono::high_resolution_clock::now();
+            // testLookUp(tree, numIndicies, file);
+            // stop = std::chrono::high_resolution_clock::now();
+            // std::chrono::duration<double, std::milli> lookup_duration = stop - start;
+            // std::cout << "LookUp benchmark took " << lookup_duration.count() << " milliseconds.\n";
+            // file.seekg(secondLinePos);
 
             // Measure time for testLeafChain
             start = std::chrono::high_resolution_clock::now();
