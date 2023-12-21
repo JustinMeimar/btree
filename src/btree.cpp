@@ -74,8 +74,6 @@ void InternalNode::print() {
     std::cout << "]" << std::endl;
 }
 
-
-
 void InternalNode::copyUp(std::shared_ptr<LeafNode> leaf) {
     Record firstRecord = leaf->elements.at(0);
     InternalRecord intRecord = {
@@ -313,7 +311,6 @@ std::shared_ptr<LeafNode> BTree::findLeafNode(uint64_t key) {
 Record BTree::lookUp(uint64_t key) {
 
     auto leafNode = findLeafNode(key);
-
     if (leafNode) {
         auto it = std::find_if(leafNode->elements.begin(), leafNode->elements.end(),
             [key](const Record& record) { return record.key == key; });
@@ -322,7 +319,6 @@ Record BTree::lookUp(uint64_t key) {
             return *it;
         } 
     }
-
     return Record {0, false};
 }
 

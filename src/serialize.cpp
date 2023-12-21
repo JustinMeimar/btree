@@ -1,7 +1,53 @@
 #include "serialize.h"
 
-void Serializer::serialzie(const std::unique_ptr<BTree> &tree) {
+std::string serializeLeaf(std::shared_ptr<LeafNode> leaf) {
+    json node;
+    // node["id"] = leaf->id;
+    // node["records"] = 
+
+    return "this is a string";
+}
+
+std::string serialize(const std::unique_ptr<BTree> &tree) {
     // walk the tree, serialzie into btree json object
+
+    json tree_repr;
+
+    // set up initail json feilds
+    tree_repr["height"] = 5;
+    tree_repr["total_capacity"] = 10; 
+    tree_repr["nodes"] = "{}"; // nodes feild starts empty
+    // tree["nodes"]["root_node"] = serialize(tree->rootNode);
+    tree_repr["nodes"][""];
+    
+    // if (tree->capacity == 0) {
+    //     std::cout << "Tree is empty" << std::endl;
+    //     return "{}";
+    // }
+
+    // std::queue<std::shared_ptr<Node>> nodesQueue;
+    // nodesQueue.push(tree->rootNode);
+
+    // while (!nodesQueue.empty()) {
+    //     std::shared_ptr<Node> currentNode = nodesQueue.front();
+    //     nodesQueue.pop();
+
+    //     serializeNode(currentNode); 
+
+    //     if (!currentNode->isLeaf()) {
+    //         std::shared_ptr<InternalNode> internalNode = std::dynamic_pointer_cast<InternalNode>(currentNode);
+    //         if (internalNode->ltChildPtr) {
+    //             nodesQueue.push(internalNode->ltChildPtr);
+    //         }
+    //         for (const auto& child : internalNode->children) {
+    //             if (child.gtChildPtr) {
+    //                 nodesQueue.push(child.gtChildPtr);
+    //             }
+    //         }
+    //     }
+    // }
+
+    return "this is a std::string";
 }
 
 // std::string BTree::serializeToJSON()

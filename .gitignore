@@ -2,5 +2,7 @@
 btree
 obj/
 tests/*M.txt
+tests/10M.txt
+tests/100M.txt
 ./obj/*
 ./obj

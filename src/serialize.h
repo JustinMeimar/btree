@@ -6,10 +6,6 @@
 
 using json = nlohmann::json;
 
-class Serializer {
-public:
-    json btree; // serializer state 
-    void serialzie(const std::unique_ptr<BTree> &tree);
-};
+std::string serialize(const std::unique_ptr<BTree> &tree);
 
 #endif

@@ -1,6 +1,8 @@
 #include "tests.h"
 #include "btree.h"
 #include "serialize.h"
+#include <chrono>
+#include <nlohmann/json.hpp>
 
 const std::string helpMessage = R"(
 B+ Tree Program Usage:
@@ -9,12 +11,12 @@ B+ Tree Program Usage:
     1. Interactive Mode: Run in interactive mode 
        Usage: ./btree -i
 
-    2. File Mode: Fill the tree with indexes from a file.
-       Usage: ./btree -f <file_name>
+    2. Run Benchmarks: Fill the tree with indexes from a file.
+       Usage: ./btree -b <file_name>
        File Format: See tests
 
     3. Test Mode:
-       Usage: ./btree -t <file_name>
+       Usage: ./btree -t <file_name> 
 )";
 
 /**
@@ -43,30 +45,72 @@ void handleTests(const std::unique_ptr<BTree> &tree, std::ifstream &file) {
     std::cout << "}" << std::endl; 
 }
 
+void runBenchmarks(const std::unique_ptr<BTree> &tree, std::ifstream &file) {
+    std::string line;
+    if (file.is_open()) {
+        if (getline(file, line)) {
+            int numIndicies = std::stoi(line);
+            std::streampos secondLinePos = file.tellg();
+
+
+            // Measure time for testInsert
+            auto start = std::chrono::high_resolution_clock::now();
+            testInsert(tree, numIndicies, file);
+            auto stop = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double, std::milli> insert_duration = stop - start;
+            std::cout << "Insert benchmark took " << insert_duration.count() << " milliseconds.\n";
+            file.seekg(secondLinePos);
+
+            // Measure time for testLookUp
+            start = std::chrono::high_resolution_clock::now();
+            testLookUp(tree, numIndicies, file);
+            stop = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double, std::milli> lookup_duration = stop - start;
+            std::cout << "LookUp benchmark took " << lookup_duration.count() << " milliseconds.\n";
+            file.seekg(secondLinePos);
+
+            // Measure time for testLeafChain
+            start = std::chrono::high_resolution_clock::now();
+            testLeafChain(tree);
+            stop = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double, std::milli> leafchain_duration = stop - start;
+            std::cout << "LeafChain benchmark took " << leafchain_duration.count() << " milliseconds.\n";
+ 
+            testRemove(tree); 
+        }
+    }
+}
+
 /**
  * Start program in Interactive mode with -i 
  */
+using json = nlohmann::json;
+
+
 void handleInteractiveMode(const std::unique_ptr<BTree> &tree) {
-    uint64_t index;
-    while (1) {
-        while (1) {
-            scanf("%lu", &index);
-            if (index == 0) {
-                std::cout << "switch to delete mode" << std::endl; 
-                break;
+    json msg;
+    std::string line;
+
+    while (std::getline(std::cin, line)) {
+        auto result = json::parse(line, nullptr, false);
+        if (result.is_discarded()) {
+            std::cout << "{\"error\": \"invalid json\"}" << std::endl;
+            continue;  // Skip the rest of the loop and wait for next input
+        } else {
+            msg = result;
+            if (msg.contains("insert")) {
+                int value = msg["insert"];
+                tree->insert(value); 
+            } else if (msg.contains("command")) {
+                std::string command = msg["command"];
+                if (command == "json_state") {
+                    std::cout << serialize(tree) << std::endl;
+                }
+            } else {
+                std::cout << "{\"error\": \"unrecognized command\"}" << std::endl;
             }
-            tree->insert(Record{index});
-            tree->print(); 
         }
-        while (1) {
-            scanf("%lu", &index);
-            if (index == 0) {
-                std::cout << "switch to insert mode" << std::endl;
-                break; 
-            } 
-            tree->remove(index);
-            tree->print();
-        }
+        msg.clear();
     }
 }
 
@@ -76,15 +120,19 @@ int main(int argc, char **argv) {
      
     if (argc >= 2) {
         std::string flag = argv[1];
-
-        if (flag == "-t" && argc == 3) { 
+        
+        if (flag == "-i") {
+            handleInteractiveMode(tree); 
+        } else if (flag == "-h") {
+            std::cerr << helpMessage;
+        } else if (flag == "-t" && argc == 3) { 
             std::string file_name = argv[2];
             std::ifstream file(file_name);
             handleTests(tree, file);
-        } else if (flag == "-h") {
-            std::cerr << helpMessage;
-        } else if (flag == "i") {
-            handleInteractiveMode(tree); 
+        }  else if (flag == "-b" && argc == 3) {
+            std::string file_name = argv[2];
+            std::ifstream file(file_name);
+            runBenchmarks(tree, file);
         } else {
             std::cerr << "Unknown flag: " << flag << std::endl;
         }
